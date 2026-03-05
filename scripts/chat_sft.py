@@ -393,7 +393,7 @@ while True:
         })
         model.train()
 
-    last_step = step == 10
+    # last_step = step == 10
     # save checkpoint at the end of the run (all ranks participate so each saves its optimizer shard)
     if last_step:
         output_dirname = args.model_tag if args.model_tag else f"d{depth}" # e.g. d12

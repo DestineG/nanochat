@@ -456,7 +456,7 @@ while True:
             print0(tokenizer.decode(sample[0]))
         model.train()
 
-    last_step = step == 10
+    # last_step = step == 10
     # save checkpoint: at the end of the run, or every save_every steps, except at the first step or the resume step
     if last_step or (step > 0 and step != args.resume_from_step and args.save_every > 0 and step % args.save_every == 0):
         save_checkpoint(

@@ -10,6 +10,30 @@ export HF_HUB_ENABLE_HF_HUB_CACHE=true
 export HF_HUB_CACHE="${NANOCHAT_BASE_DIR}/hf_hub_cache"
 export HF_DATASETS_CACHE="${NANOCHAT_BASE_DIR}/hf_datasets_cache"
 
+# --- 获取 GPU 数量 (NPROC_PER_NODE) ---
+echo "检测到系统中可用 GPU 如下："
+nvidia-smi -L
+echo
+read -p "请输入要使用的 GPU 数量 (NPROC_PER_NODE, 默认为 1): " nproc_input
+# 如果直接回车则默认为 1
+NPROC_PER_NODE=${nproc_input:-1}
+echo "设定 NPROC_PER_NODE 为: $NPROC_PER_NODE"
+echo
+
+# --- 获取 FP8 参数 ---
+echo "==================== 支持 FP8 的 NVIDIA GPU ===================="
+echo "【消费/游戏卡】 RTX 40/50 全系"
+echo "【专业/训练卡】 H100, H200, L40S, RTX Ada 系列等"
+echo "=================================================================="
+read -p "是否启用 --fp8 训练？(y/n): " fp8_choice
+fp8_arg=""
+if [[ "$fp8_choice" == [yY] ]]; then
+    fp8_arg="--fp8"
+    echo "已启用：$fp8_arg"
+else
+    echo "不启用 FP8"
+fi
+
 # -----------------------------------------------------------------------------
 # 环境搭建
 
@@ -60,7 +84,7 @@ python -m scripts.tok_eval
 echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=18 --target-param-data-ratio=8.25 --device-batch-size=1 --run=$WANDB_RUN
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=18 $fp8_arg --target-param-data-ratio=8.25 --device-batch-size=1 --run=$WANDB_RUN
 torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval -- --device-batch-size=1
 
 # -----------------------------------------------------------------------------
