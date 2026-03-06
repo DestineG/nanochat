@@ -1,31 +1,56 @@
 #!/bin/bash
+
 # -----------------------------------------------------------------------------
-# 变量设置
-NPROC_PER_NODE=1
-NANOCHAT_BASE_DIR="/media/data/liujiang/data/datasets/nanochat_base_dir"
-export OMP_NUM_THREADS=1
-export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR}"
-export HF_ENDPOINT=https://hf-mirror.com
-export HF_HUB_ENABLE_HF_HUB_CACHE=true
-export HF_HUB_CACHE="${NANOCHAT_BASE_DIR}/hf_hub_cache"
-export HF_DATASETS_CACHE="${NANOCHAT_BASE_DIR}/hf_datasets_cache"
+# 参数配置获取
 
-# --- 获取 GPU 数量 (NPROC_PER_NODE) ---
+# 获取NANOCHAT_BASE_DIR
+default_base_dir="$HOME/.cache/nanochat"
+echo "--------------------------------------------------"
+echo "请输入项目中间产物目录 (直接回车使用默认值):"
+read -p "路径 [$default_base_dir]: " input_dir
+NANOCHAT_BASE_DIR=${input_dir:-$default_base_dir}
+
+# 检测目录是否存在
+if [ ! -d "$NANOCHAT_BASE_DIR" ]; then
+    echo "目录 $NANOCHAT_BASE_DIR 不存在"
+    read -p "是否创建该目录？(y/n) [y]: " mkdir_choice
+    mkdir_choice=${mkdir_choice:-y} # 默认创建
+    
+    if [[ "$mkdir_choice" == [yY] ]]; then
+        mkdir -p "$NANOCHAT_BASE_DIR"
+        if [ $? -eq 0 ]; then
+            echo "目录创建成功"
+        else
+            echo "目录创建失败，请检查权限"
+            exit 1
+        fi
+    else
+        echo "未创建目录，脚本退出"
+        exit 1
+    fi
+else
+    echo "目录已存在，继续执行"
+fi
+
+echo
+# 设置 GPU 数量
+echo "--------------------------------------------------"
 echo "检测到系统中可用 GPU 如下："
-nvidia-smi -L
+nvidia-smi -L 2>/dev/null || echo "未检测到 NVIDIA GPU"
 echo
-read -p "请输入要使用的 GPU 数量 (NPROC_PER_NODE, 默认为 1): " nproc_input
-# 如果直接回车则默认为 1
-NPROC_PER_NODE=${nproc_input:-1}
+default_nproc=1
+read -p "请输入要使用的 GPU 数量 (NPROC_PER_NODE) [$default_nproc]: " nproc_input
+NPROC_PER_NODE=${nproc_input:-$default_nproc}
 echo "设定 NPROC_PER_NODE 为: $NPROC_PER_NODE"
-echo
 
-# --- 获取 FP8 参数 ---
+echo
+# FP8 选项
 echo "==================== 支持 FP8 的 NVIDIA GPU ===================="
-echo "【消费/游戏卡】 RTX 40/50 全系"
-echo "【专业/训练卡】 H100, H200, L40S, RTX Ada 系列等"
+echo "【消费级】 RTX 40/50 系列 | 【专业级】 H100/H200/L40S/RTX Ada"
 echo "=================================================================="
-read -p "是否启用 --fp8 训练？(y/n): " fp8_choice
+read -p "是否启用 --fp8 训练？(y/n) [n]: " fp8_choice
+fp8_choice=${fp8_choice:-n} # 默认不启用
+
 fp8_arg=""
 if [[ "$fp8_choice" == [yY] ]]; then
     fp8_arg="--fp8"
@@ -33,6 +58,21 @@ if [[ "$fp8_choice" == [yY] ]]; then
 else
     echo "不启用 FP8"
 fi
+
+# 导出环境变量
+export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR}"
+export OMP_NUM_THREADS=1
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HUB_ENABLE_HF_HUB_CACHE=true
+export HF_HUB_CACHE="${NANOCHAT_BASE_DIR}/hf_hub_cache"
+export HF_DATASETS_CACHE="${NANOCHAT_BASE_DIR}/hf_datasets_cache"
+
+echo
+echo "==================== 配置汇总 ===================="
+echo "BASE_DIR: $NANOCHAT_BASE_DIR"
+echo "GPU 数量: $NPROC_PER_NODE"
+echo "FP8 选项: ${fp8_arg:-无}"
+echo "=================================================="
 
 # -----------------------------------------------------------------------------
 # 环境搭建
