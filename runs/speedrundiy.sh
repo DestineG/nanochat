@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# -----------------------------------------------------------------------------
-# 参数配置获取
+# =============================================================================
+# 1. 参数配置获取 (交互式)
+# =============================================================================
 
-# 获取NANOCHAT_BASE_DIR
+# 获取 NANOCHAT_BASE_DIR
 default_base_dir="$HOME/.cache/nanochat"
 echo "--------------------------------------------------"
 echo "请输入项目中间产物目录 (直接回车使用默认值):"
@@ -14,7 +15,7 @@ NANOCHAT_BASE_DIR=${input_dir:-$default_base_dir}
 if [ ! -d "$NANOCHAT_BASE_DIR" ]; then
     echo "目录 $NANOCHAT_BASE_DIR 不存在"
     read -p "是否创建该目录？(y/n) [y]: " mkdir_choice
-    mkdir_choice=${mkdir_choice:-y} # 默认创建
+    mkdir_choice=${mkdir_choice:-y} 
     
     if [[ "$mkdir_choice" == [yY] ]]; then
         mkdir -p "$NANOCHAT_BASE_DIR"
@@ -49,7 +50,7 @@ echo "==================== 支持 FP8 的 NVIDIA GPU ===================="
 echo "【消费级】 RTX 40/50 系列 | 【专业级】 H100/H200/L40S/RTX Ada"
 echo "=================================================================="
 read -p "是否启用 --fp8 训练？(y/n) [n]: " fp8_choice
-fp8_choice=${fp8_choice:-n} # 默认不启用
+fp8_choice=${fp8_choice:-n} 
 
 fp8_arg=""
 if [[ "$fp8_choice" == [yY] ]]; then
@@ -59,20 +60,41 @@ else
     echo "不启用 FP8"
 fi
 
-# 导出环境变量
-export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR}"
+echo
+# Batch Size 选项
+echo "--------------------------------------------------"
+default_batch_size=1
+read -p "请输入每个设备的 Batch Size (device-batch-size) [$default_batch_size]: " batch_input
+DEVICE_BATCH_SIZE=${batch_input:-$default_batch_size}
+echo "设定 Device Batch Size 为: $DEVICE_BATCH_SIZE"
+
+echo
+# WANDB 运行名称
+echo "--------------------------------------------------"
+echo "请输入 Weights & Biases 运行名称 (直接回车跳过日志记录):"
+read -p "WANDB_RUN [dummy]: " wandb_input
+WANDB_RUN=${wandb_input:-dummy}
+
+# -----------------------------------------------------------------------------
+# 2. 导出环境变量
+# -----------------------------------------------------------------------------
+export NANOCHAT_BASE_DIR="$NANOCHAT_BASE_DIR"
 export OMP_NUM_THREADS=1
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_HUB_ENABLE_HF_HUB_CACHE=true
-export HF_HUB_CACHE="${NANOCHAT_BASE_DIR}/hf_hub_cache"
-export HF_DATASETS_CACHE="${NANOCHAT_BASE_DIR}/hf_datasets_cache"
+export HF_HUB_CACHE="$NANOCHAT_BASE_DIR/hf_hub_cache"
+export HF_DATASETS_CACHE="$NANOCHAT_BASE_DIR/hf_datasets_cache"
+export WANDB_RUN="$WANDB_RUN"
 
 echo
 echo "==================== 配置汇总 ===================="
 echo "BASE_DIR: $NANOCHAT_BASE_DIR"
-echo "GPU 数量: $NPROC_PER_NODE"
-echo "FP8 选项: ${fp8_arg:-无}"
+echo "GPU 数量 : $NPROC_PER_NODE"
+echo "FP8 选项 : ${fp8_arg:-已关闭}"
+echo "Device Batch Size : $DEVICE_BATCH_SIZE"
+echo "W&B 运行 : $WANDB_RUN"
 echo "=================================================="
+echo
 
 # -----------------------------------------------------------------------------
 # 环境搭建
@@ -124,8 +146,8 @@ python -m scripts.tok_eval
 echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=18 $fp8_arg --target-param-data-ratio=8.25 --device-batch-size=1 --run=$WANDB_RUN
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval -- --device-batch-size=1
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=18 $fp8_arg --target-param-data-ratio=8.25 --device-batch-size=$DEVICE_BATCH_SIZE --run=$WANDB_RUN
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval -- --device-batch-size=$DEVICE_BATCH_SIZE
 
 # -----------------------------------------------------------------------------
 # 指令微调数据集下载，并进行指令微调和评测
@@ -136,7 +158,7 @@ if [ ! -f "$IDENTITY_FILE" ]; then
 else
     echo "文件已存在，跳过下载: $IDENTITY_FILE"
 fi
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- --device-batch-size=1 --run=$WANDB_RUN
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- --device-batch-size=$DEVICE_BATCH_SIZE --run=$WANDB_RUN
 torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft
 
 # 命令行聊天测试
